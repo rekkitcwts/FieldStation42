@@ -18,7 +18,7 @@ class CableBox:
         self.status_socket = status_socket
         self.press_socket = press_socket
         
-        self.chip = gpiod.Chip(CHIP_PATH)
+        self.chip = gpiod.chip(CHIP_PATH)
         self.line = self.chip.get_line(LINE_OFFSET)
 
         self.line.request(
