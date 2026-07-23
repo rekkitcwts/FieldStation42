@@ -23,7 +23,7 @@ class CableBox:
 
         self.line.request(
             consumer="fieldstation42",
-            type=gpiod.LINE_REQ_EV_BOTH_EDGES
+            type=gpiod.line_request.EVENT_BOTH_EDGES
         )
         
     # This is where the GPIO buttons are pressed
@@ -31,7 +31,7 @@ class CableBox:
         if self.line.event_wait(sec=0):
             event = self.line.event_read()
             
-            if event.type == gpiod.LineEvent.FALLING_EDGE:
+            if event.type == gpiod.line_event.FALLING_EDGE:
                 print("Button pressed!")
                 return "BUTTON"
             
