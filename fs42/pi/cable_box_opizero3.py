@@ -33,7 +33,7 @@ class CableBox:
         if self.line.event_wait(timedelta(milliseconds=50)):
             event = self.line.event_read()
             
-            if event.event_type == gpiod.line_event.FALLING_EDGE::
+            if event.event_type == gpiod.line_event.FALLING_EDGE:
                 print("Button pressed!")
                 return "BUTTON"
             
