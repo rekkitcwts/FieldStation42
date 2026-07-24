@@ -50,7 +50,8 @@ class CableBox:
             
             # Print something here for now
             if key_pressed:
-                pass
+                os.system("startx")
+                time.sleep(0.3)
             
 
 if __name__ == "__main__":
