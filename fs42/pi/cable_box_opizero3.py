@@ -10,6 +10,7 @@ from datetime import timedelta
 
 # Adjust chip and line offset based on your configuration 
 # (e.g., /dev/gpiochip0 and line offset for your specific pin)
+# PH2 - restart button, in case FS42 freezes
 CHIP_PATH = "/dev/gpiochip0"
 LINE_OFFSET = 226  # Example offset for PH2 or calculate via pin formula
 
@@ -51,7 +52,7 @@ class CableBox:
             # Print something here for now
             if key_pressed:
                 print("Button pressed from service!", flush=True)
-                os.system("startx")
+                os.system("systemctl --user restart fs42")
                 time.sleep(0.3)
             
 
