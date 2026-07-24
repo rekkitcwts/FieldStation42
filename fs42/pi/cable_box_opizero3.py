@@ -6,6 +6,7 @@ import subprocess
 
 # Orange Pi gpiod
 import gpiod
+from datetime import timedelta
 
 # Adjust chip and line offset based on your configuration 
 # (e.g., /dev/gpiochip0 and line offset for your specific pin)
@@ -29,7 +30,7 @@ class CableBox:
         
     # This is where the GPIO buttons are pressed
     def read_keys(self):
-        if self.line.event_wait(sec=0):
+        if self.line.event_wait(timedelta(milliseconds=50))::
             event = self.line.event_read()
             
             if event.type == gpiod.line_event.FALLING_EDGE:
