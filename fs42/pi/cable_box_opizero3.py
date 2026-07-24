@@ -50,7 +50,7 @@ class CableBox:
             
             # Print something here for now
             if key_pressed:
-                os.system("startx")
+                print("Button pressed from service!", flush=True)
                 time.sleep(0.3)
             
 
