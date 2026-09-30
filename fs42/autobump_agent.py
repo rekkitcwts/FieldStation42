@@ -224,7 +224,9 @@ class AutoBumpAgent:
             "duration": "duration",
             "bg_music": "bg_music",
             "loopmusic": "loopmusic",
-            "countdown": "countdown"
+            "countdown": "countdown",
+            "station_logo": "station_logo",
+            "hide_title": "hide_title"
         }
 
         # Process each config item
@@ -241,6 +243,10 @@ class AutoBumpAgent:
                     value = AutoBumpAgent.resolve_bg_video_url(value)
                 elif key == "bg_video_audio":
                     value = str(value).lower()
+                elif key == "station_logo":
+                    # Convert filename to full URL if not already a URL
+                    if not str(value).startswith("http"):
+                        value = f"http://127.0.0.1:4242/static/bump/{value}"
                 params[url_param] = value
 
         # Generate query string
