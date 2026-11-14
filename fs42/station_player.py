@@ -54,6 +54,7 @@ def update_status_socket(
     content_type=None,
     awaiting_pin=False,
     pin_digits_entered=0,
+    metadata=None,
 ):
     status_obj = {
         "status": status,
@@ -71,6 +72,14 @@ def update_status_socket(
         status_obj["file_path"] = file_path
     if content_type is not None:
         status_obj["content_type"] = content_type
+    if metadata:
+        from fs42.nfo_agent import NFOAgent
+
+        # Metadata never overrides the player's own fields.
+        for key, value in metadata.items():
+            status_obj.setdefault(key, value)
+        if "content_rating" in metadata:
+            status_obj["content_rating"] = NFOAgent.normalize_content_rating(metadata["content_rating"])
     status_socket = StationManager().server_conf["status_socket"]
     as_str = json.dumps(status_obj)
     with open(status_socket, "w") as fp:
@@ -450,6 +459,10 @@ class StationPlayer:
         lines = NFOAgent.overlay_lines(meta)
         return NFOData(lines) if lines else None
 
+    def _read_playback_metadata(self, file_path):
+        from fs42.metadata_io import MetadataIO
+        return MetadataIO.read(file_path) or {}
+
     def _show_now_playing(self, file_path):
         # show the Now Playing overlay for an audio file
         import time
@@ -517,13 +530,13 @@ class StationPlayer:
         self.mpv.vf = self.reception.filter()
 
     def update_reception(self):
-        if not self.reception.is_perfect():
-            self.reception.improve()
-            # did that get us below threshhold?
-            if self.reception.is_perfect():
-                self.mpv.vf = ""
-            else:
-                self.mpv.vf = self.reception.filter()
+        if self.reception.is_perfect():
+            return
+        self.reception.improve()
+        try:
+            self.mpv.vf = "" if self.reception.is_perfect() else self.reception.filter()
+        except TimeoutError:
+            self._l.warning("mpv did not respond to reception filter update")
 
     def play_file(self, file_path, file_duration=None, offset_seconds=None, is_stream=False, title="Unknown", content_type=None, media_type=None):
         try:
@@ -542,6 +555,15 @@ class StationPlayer:
                         if file_duration
                         else "n/a"
                     )
+                    metadata = {}
+                    if media_type == "video" and not is_stream:
+                        try:
+                            metadata = self._read_playback_metadata(file_path)
+                        except Exception as e:
+                            self._l.warning(
+                                f"Could not read playback metadata: {e}"
+                            )
+
                     update_status_socket(
                         "playing",
                         self.station_config["network_name"],
@@ -551,6 +573,7 @@ class StationPlayer:
                         duration=duration,
                         file_path=file_path,
                         content_type=content_type,
+                        metadata=metadata,
                     )
                           
                 else:
@@ -1116,7 +1139,10 @@ class StationPlayer:
                             self.update_reception()
                         else:
                             if self.scrambler:
-                                self.mpv.vf = self.scrambler.update_filter()
+                                try:
+                                    self.mpv.vf = self.scrambler.update_filter()
+                                except TimeoutError:
+                                    self._l.warning("mpv did not respond to scrambler filter update")
 
                         # Calculate time remaining based on wall clock
                         time_remaining = (target_end_time - datetime.datetime.now()).total_seconds()

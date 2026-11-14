@@ -2,6 +2,8 @@
 
 `cable_box.py` drives a physical cable box built on a Raspberry Pi: a 3x4 matrix keypad for channel entry and a TM1637 4-digit display for the channel number and clock.
 
+For building the box and full wiring instructions, see the [cable-box repository](https://github.com/shane-mason/cable-box), including the [Raspberry Pi 4 wiring guide](https://github.com/shane-mason/cable-box/blob/main/docs/pi4_readme.md).
+
 ## 📦 Dependencies
 
 ```bash
@@ -20,6 +22,25 @@ python3 fs42/pi/cable_box.py
 ## 🔢 Channel Entry
 
 Type up to three digits for channels 0–999. After one or two digits the cable box waits 1.5 seconds and then tunes; a third digit tunes right away. The display shows the channel number right-aligned and zero-padded to two digits (`  05`, `  12`, ` 178`).
+
+### Special channels
+
+- `97` — show the CPU temperature
+- `98` — power off the Pi
+- `99` — stop FieldStation42's services (the cable box and remote controller keep running)
+
+## 🔘 Power Button
+
+Only active when `runtime/cable_box.json` has a `power_button` section (see below). Press it quickly (each press under a second, less than a second apart). The display counts presses as you go (`P  1`, `P  2`, ...), and the action runs a second after the last press:
+
+| Presses | Action | Display |
+| ------- | ------ | ------- |
+| 2 | Start FieldStation42's services, if they're stopped | ` On ` |
+| 3 | Restart FieldStation42's services | `rSt ` |
+| 4 | Stop FieldStation42's services | `StOP` |
+| 5 | Show the CPU temperature | temperature |
+
+Hold the button to power off the Pi. After one second the display counts down from `OFF4` to `OFF1`, and at five seconds it shows ` OFF` and powers off. Let go before then to cancel. Starting, stopping and restarting never touch the cable box or remote controller services, so the button can always start FieldStation42 again. Powering off uses `systemctl poweroff`, which needs no sudo.
 
 ## 🔌 Pinout
 
@@ -54,13 +75,15 @@ If your build is wired differently, create `runtime/cable_box.json` with your pi
 }
 ```
 
-The example above is the Raspberry Pi 4 cable box wiring.
+The example above is the Raspberry Pi 5 cable box wiring.
 
 - `keypad.cols` — exactly 3 pins, in order C1, C2, C3
 - `keypad.rows` — exactly 4 pins, in order R1, R2, R3, R4
 - `display.clk` / `display.dio` — the TM1637 clock and data pins
+- `power_button.pin` — optional momentary button between this pin and ground. There's no default, so the button is off unless this section is present. Use GPIO 3 if you want the button to also start a halted Pi.
+- `led.pin` — optional status LED (through a resistor to ground). It flashes on each keypad press and stays lit while the power button is held down. There's no default, so the LED is off unless this section is present.
 
-Both sections are optional. A section you include replaces that section's defaults entirely, so give all of its pins. For example, to change only the display:
+Every section is optional. A section you include replaces that section's defaults entirely, so give all of its pins. For example, to change only the display:
 
 ```json
 {
@@ -69,6 +92,14 @@ Both sections are optional. A section you include replaces that section's defaul
 ```
 
 If the file can't be read or isn't valid JSON, the cable box prints an error and falls back to the default pinout. An invalid GPIO number stops the cable box at startup with an error.
+
+## 🌐 Server Connection
+
+Channel changes go through the FieldStation42 server API (`/player/channels/...`), so the player must be running. By default the cable box connects to `127.0.0.1` on the `server_port` from `confs/main_config.json` (4242 if unset) and sends the `api_key` from the same file if one is set. Environment variables override these:
+
+- `FS42_HOST` — server host (default `127.0.0.1`)
+- `FS42_PORT` — server port (default `server_port`, or 4242)
+- `FS42_API_KEY` — API key (default `api_key`)
 
 ## ⚙️ Other Settings
 
