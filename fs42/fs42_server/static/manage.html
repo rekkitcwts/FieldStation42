@@ -42,6 +42,8 @@
 
         .manage-reason { font-size: 0.9em; font-style: italic; }
 
+        .onair-row { display: grid; grid-template-columns: 1fr 6em; gap: 0.75em; }
+
         .manage-facts {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -137,6 +139,63 @@
             }
         }
 
+        // On-air controls
+        async function checkPlayerConnected() {
+            let connected = false;
+            try {
+                const resp = await window.fs42Api.get('player/status/queue_connected');
+                connected = !!resp.queue_connected;
+            } catch (e) { }
+            for (const panel of document.querySelectorAll('.onair-panel')) {
+                panel.classList.toggle('is-disabled', !connected);
+                panel.querySelector('.onair-offline').style.display = connected ? 'none' : '';
+                panel.querySelectorAll('input, select, button').forEach(el => el.disabled = !connected);
+            }
+        }
+
+        function flashButton(form, text) {
+            const button = form.querySelector('button[type="submit"]');
+            const originalText = button.textContent;
+            button.textContent = text;
+            button.disabled = true;
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.disabled = false;
+            }, 2000);
+        }
+
+        async function sendTicker(event) {
+            event.preventDefault();
+            const form = event.target;
+            const message = document.getElementById('ticker-message').value.trim();
+            if (!message) return;
+            try {
+                await window.fs42Api.post('player/ticker', {
+                    message: message,
+                    header: document.getElementById('ticker-header').value.trim() || 'FS42',
+                    style: document.getElementById('ticker-style').value,
+                    iterations: parseInt(document.getElementById('ticker-iterations').value) || 2
+                });
+                form.reset();
+                flashButton(form, 'Sent!');
+            } catch (error) {
+                alert('Failed to send ticker: ' + (error.detail || error.message));
+            }
+        }
+
+        async function sendBreakIn(event) {
+            event.preventDefault();
+            const form = event.target;
+            const filePath = document.getElementById('break-in-path').value.trim();
+            if (!filePath) return;
+            try {
+                await window.fs42Api.post('player/break-in', { file_path: filePath });
+                flashButton(form, 'Sent!');
+            } catch (error) {
+                alert('Failed to send break-in: ' + (error.detail || error.message));
+            }
+        }
+
         // Server management
         let manageStatus = null;
 
@@ -221,7 +280,7 @@
                 el.innerHTML = `
                     <div class="manage-panel manage-panel-wide">
                         <h3>API key required</h3>
-                        <p>Restarting, stopping and updating FieldStation42 from here only works when an
+                        <p>Restarting, stopping, updating and editing settings from here only works when an
                         <code>api_key</code> is set in <code>confs/main_config.json</code>.
                         See <code>docs/API_SECURITY.md</code>.</p>
                     </div>`;
@@ -236,6 +295,13 @@
                 disabledReason: s.update_blocker ? escapeHtml(s.update_blocker) : null,
             });
 
+            const settingsPanel = renderPanel({
+                id: 'settings',
+                title: 'System Configuration',
+                text: 'Start channel, clock formats, parental controls, scheduling, the API key and the rest of <code>main_config.json</code>.',
+                button: '<a class="pure-button" href="/static/settings.html">Edit Configuration</a>',
+            });
+
             if (s.standby) {
                 el.innerHTML = `
                     <div class="manage-panels">
@@ -247,6 +313,7 @@
                             button: '<button class="pure-button pure-button-primary" onclick="startServices()">Start FieldStation42</button>',
                         })}
                         ${updatePanel}
+                        ${settingsPanel}
                     </div>`;
                 return;
             }
@@ -277,6 +344,7 @@
                         button: `<button class="pure-button ${stopClass}" onclick="stopServices()">Stop FieldStation42</button>`,
                     })}
                     ${updatePanel}
+                    ${settingsPanel}
                 </div>`;
         }
 
@@ -454,7 +522,57 @@
                 </div>
 
                 <div class="pure-u-1 manage-section">
-                    <h2>Application Settings</h2>
+                    <h2>On Air</h2>
+                    <div class="manage-panels">
+                        <div class="manage-panel onair-panel">
+                            <h3>Ticker</h3>
+                            <p>Scroll a message across the bottom of the screen.</p>
+                            <p class="manage-reason onair-offline" style="display:none;">Player isn't running.</p>
+                            <form id="ticker-form" class="pure-form pure-form-stacked" onsubmit="sendTicker(event)">
+                                <label for="ticker-message">Message</label>
+                                <input id="ticker-message" type="text" class="pure-input-1" placeholder="Enter ticker message..." required>
+                                <div class="onair-row">
+                                    <div>
+                                        <label for="ticker-header">Header</label>
+                                        <input id="ticker-header" type="text" class="pure-input-1" value="FS42" placeholder="Header">
+                                    </div>
+                                    <div>
+                                        <label for="ticker-iterations">Count</label>
+                                        <input id="ticker-iterations" type="number" class="pure-input-1" value="2" min="1" max="10">
+                                    </div>
+                                </div>
+                                <label for="ticker-style">Style</label>
+                                <select id="ticker-style" class="pure-input-1">
+                                    <option value="fieldstation">FieldStation</option>
+                                    <option value="breaking">Breaking</option>
+                                    <option value="weather">Weather</option>
+                                    <option value="sports">Sports</option>
+                                    <option value="financial">Financial</option>
+                                    <option value="election">Election</option>
+                                </select>
+                                <div class="manage-actions" style="margin-top:1em;">
+                                    <button type="submit" class="pure-button pure-button-primary">Send Ticker</button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="manage-panel onair-panel">
+                            <h3>Break-In</h3>
+                            <p>Interrupt programming with a video (emergency alert, breaking news, station break…), then return to the schedule. Relative paths start from the FieldStation42 folder.</p>
+                            <p class="manage-reason onair-offline" style="display:none;">Player isn't running.</p>
+                            <form id="break-in-form" class="pure-form pure-form-stacked" onsubmit="sendBreakIn(event)">
+                                <label for="break-in-path">Video path</label>
+                                <input id="break-in-path" type="text" class="pure-input-1" placeholder="catalog/alerts/eas.mp4" required>
+                                <div class="manage-actions" style="margin-top:1em;">
+                                    <button type="submit" class="pure-button pure-button-primary">Break In</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pure-u-1 manage-section">
+                    <h2>Browser Settings</h2>
+                    <p>These are saved in this browser only.</p>
                     <div class="manage-panels">
                         <div class="manage-panel">
                             <h3>Theme</h3>
@@ -497,6 +615,9 @@
 
             // Initialize auto-scroll checkbox
             initAutoScrollCheckbox();
+
+            checkPlayerConnected();
+            setInterval(checkPlayerConnected, 5000);
 
             await loadManageStatus();
             startWatching();
